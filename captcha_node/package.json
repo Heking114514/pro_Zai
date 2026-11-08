@@ -1,0 +1,8 @@
+{
+  "name": "zcode2api-captcha-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Optional jsdom runtime for the official Aliyun Captcha SDK",
+  "engines": { "node": ">=18" },
+  "dependencies": { "jsdom": "26.1.0" }
+}

@@ -1,0 +1,35 @@
+# Environment & Virtualenvs
+.venv/
+venv/
+env/
+.playwright-browsers/
+.tmp/
+data/
+.env
+captcha_node/node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# User Data & Private Credentials (CRITICAL)
+config.json
+tasks.json
+accounts_with_tokens.json
+tokens.txt
+*.log
+
+# Temporary Debug Files & Screenshots
+*.png
+*.jpg
+*.jpeg
+inspect_*.py
+
+# Tests are source files and must remain tracked
+!tests/
+!tests/test_*.py
+
+# System & IDE
+.DS_Store
+.idea/
+.vscode/
+logs/

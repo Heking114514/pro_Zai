@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Z.ai 账号批量注册工作台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-100">
+          <i class="fa-solid fa-users-gear text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">Z.ai 账号批量自动化注册台</h1>
+          <p class="text-xs text-slate-500">纯协议注册 · 仅验证码弹出本机 Chromium · 自动收信激活与 CLI JWT 提取</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <!-- WS Connection Badge -->
+        <div id="wsBadge" class="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span>连接中...</span>
+        </div>
+
+        <a href="/api/debug-log" target="_blank" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white font-semibold transition shadow-sm">
+          <i class="fa-solid fa-file-lines text-slate-300"></i>
+          <span>Debug 日志</span>
+        </a>
+        <a href="/api/traffic-log" target="_blank" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-cyan-700 hover:bg-cyan-800 text-white font-semibold transition shadow-sm">
+          <i class="fa-solid fa-wave-square text-cyan-200"></i>
+          <span>抓包</span>
+        </a>
+
+        <div id="batchStatusBadge" class="hidden flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-medium border border-blue-200">
+          <i class="fa-solid fa-spinner fa-spin text-xs"></i>
+          <span>队列运行中</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CAPTCHA Alert Floating Banner -->
+  <div id="captchaAlert" class="hidden bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-3 shadow-lg transition-all">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-puzzle-piece text-2xl text-amber-100 animate-pulse"></i>
+        <div>
+          <h4 class="font-bold text-sm">当前账号正在等待人工滑块</h4>
+          <p class="text-xs text-amber-100">协议会话已建立。请切换到本机弹出的 Chromium 窗口完成滑块；完成后浏览器会关闭，注册与激活继续走协议。</p>
+        </div>
+      </div>
+      <a href="/api/debug-log" target="_blank" class="text-xs bg-white text-amber-900 font-bold px-4 py-1.5 rounded-lg shadow hover:bg-amber-50 transition flex items-center gap-1">
+        <span>查看 Debug 日志</span>
+        <i class="fa-solid fa-arrow-right text-[10px]"></i>
+      </a>
+    </div>
+  </div>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
+
+    <!-- Stat Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500">待办任务总计</p>
+          <h3 id="statTotal" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+          <i class="fa-solid fa-list-check"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-emerald-600">已成功注册激活</p>
+          <h3 id="statSuccess" class="text-2xl font-bold text-emerald-600 mt-1">0</h3>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-amber-600">等待滑块验证</p>
+          <h3 id="statCaptcha" class="text-2xl font-bold text-amber-600 mt-1">0</h3>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+          <i class="fa-solid fa-puzzle-piece"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-rose-600">异常/失败</p>
+          <h3 id="statFailed" class="text-2xl font-bold text-rose-600 mt-1">0</h3>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="border-b border-slate-200 flex gap-6">
+      <button onclick="switchTab('tasks')" id="tabBtn-tasks" class="tab-btn pb-3 text-sm font-semibold text-indigo-600 border-b-2 border-indigo-600 flex items-center gap-2">
+        <i class="fa-solid fa-table-list"></i>
+        <span>任务列表与批量导入</span>
+      </button>
+      <button onclick="switchTab('email')" id="tabBtn-email" class="tab-btn pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-2">
+        <i class="fa-solid fa-envelope-open-text"></i>
+        <span>绑定邮箱服务 (IMAP / API)</span>
+      </button>
+      <button onclick="switchTab('proxy')" id="tabBtn-proxy" class="tab-btn pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-2">
+        <i class="fa-solid fa-network-wired"></i>
+        <span>公司网络代理 (Proxy)</span>
+      </button>
+      <button onclick="switchTab('protocol')" id="tabBtn-protocol" class="tab-btn pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-2">
+        <i class="fa-solid fa-fingerprint"></i>
+        <span>协议与指纹</span>
+      </button>
+      <button onclick="switchTab('logs')" id="tabBtn-logs" class="tab-btn pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-2">
+        <i class="fa-solid fa-terminal"></i>
+        <span>实时运行日志</span>
+      </button>
+    </div>
+
+    <!-- TAB 1: Tasks Management -->
+    <section id="tab-tasks" class="tab-content flex flex-col gap-4">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <button onclick="openAddModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition shadow-sm">
+            <i class="fa-solid fa-plus"></i>
+            <span>导入/新增注册账号</span>
+          </button>
+
+          <div class="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 shadow-sm" title="本次队列要处理的账号数量；浏览器窗口始终一次只打开一个">
+            <i class="fa-solid fa-bullseye text-indigo-600"></i>
+            <label for="targetCountInput" class="font-medium">目标账号数:</label>
+            <input id="targetCountInput" type="number" min="1" step="1" value="1" class="w-16 px-2 py-1 bg-white border border-slate-300 rounded-md text-center text-xs font-bold text-indigo-700 outline-none focus:ring-1 focus:ring-indigo-500">
+            <span class="px-2 py-0.5 bg-white border border-slate-300 rounded font-medium text-slate-600">单窗口串行</span>
+          </div>
+
+          <button id="btnStartBatch" onclick="startBatch()" title="API 邮箱池模式会自动为未使用邮箱生成英文姓名和随机密码" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition shadow-sm">
+            <i class="fa-solid fa-play"></i>
+            <span>开始批量注册</span>
+          </button>
+
+          <button id="btnZcode2ApiToggle" onclick="toggleZcode2ApiImport()" title="注册成功后是否自动把账号推送到 zcode2api 账号池；关闭后可逐个手动导入" class="px-3 py-2 text-sm font-medium rounded-lg flex items-center gap-2 transition border shadow-sm">
+            <i id="zcode2ApiToggleIcon" class="fa-solid fa-cloud-arrow-up text-xs"></i>
+            <span id="zcode2ApiToggleLabel">自动导入</span>
+          </button>
+
+          <button id="btnPauseBatch" onclick="pauseBatch()" class="hidden px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition shadow-sm">
+            <i class="fa-solid fa-pause"></i>
+            <span>暂停队列</span>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <a href="/api/export-tokens" class="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium rounded-lg flex items-center gap-1.5 transition border border-indigo-200 shadow-sm" title="导出直接给 Zcode2Api 使用的 tokens.txt">
+            <i class="fa-solid fa-key text-xs"></i>
+            <span>导出 tokens.txt (CLI)</span>
+          </a>
+          <a href="/api/export-web-tokens" class="px-3 py-2 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 text-sm font-medium rounded-lg flex items-center gap-1.5 transition border border-cyan-200 shadow-sm" title="导出网页会话 JWT，每行格式为 email<TAB>jwt">
+            <i class="fa-solid fa-globe text-xs"></i>
+            <span>导出 Web JWT</span>
+          </a>
+          <a href="/api/export" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg flex items-center gap-1.5 transition border border-slate-200">
+            <i class="fa-solid fa-download"></i>
+            <span>导出账号 (CSV)</span>
+          </a>
+          <button onclick="clearTasks('completed')" class="px-3 py-2 text-slate-500 hover:text-slate-700 text-sm transition">
+            清理已完成
+          </button>
+          <button onclick="clearTasks('all')" class="px-3 py-2 text-rose-500 hover:text-rose-700 text-sm transition">
+            清空列表
+          </button>
+        </div>
+      </div>
+
+      <!-- Tasks Table -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-600">
+            <thead class="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
+              <tr>
+                <th class="px-4 py-3">序号</th>
+                <th class="px-4 py-3">姓名</th>
+                <th class="px-4 py-3">邮箱账号</th>
+                <th class="px-4 py-3">密码</th>
+                <th class="px-4 py-3">当前状态</th>
+                <th class="px-4 py-3">操作反馈 / 详细信息</th>
+                <th class="px-4 py-3 text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody id="taskTableBody" class="divide-y divide-slate-100 font-normal">
+              <!-- Dynamically populated -->
+              <tr>
+                <td colspan="7" class="px-4 py-8 text-center text-slate-400">
+                  暂无任务。API 邮箱池模式可直接点击「开始批量注册」，系统会自动生成英文姓名和随机密码。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Email Configuration -->
+    <section id="tab-email" class="tab-content hidden">
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-3xl flex flex-col gap-6">
+        <div>
+          <h3 class="text-base font-bold text-slate-900">邮箱接入（CF 动态 / 静态池 / IMAP）</h3>
+          <p class="text-xs text-slate-500 mt-1">CF 动态模式会为每个任务即时申请独立邮箱和 JWT，注册后自动轮询验证邮件并提取激活链接。</p>
+        </div>
+
+        <form id="emailConfigForm" onsubmit="saveEmailConfig(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="col-span-1 md:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">邮箱接入方式</label>
+            <select id="cfgMailProvider" onchange="toggleMailProviderFields()" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="imap">IMAP 邮箱（单账号/共享收件箱）</option>
+              <option value="api">API 邮箱池（预先生成邮箱 + 每邮箱 JWT）</option>
+              <option value="cf_dynamic">CF 动态邮箱（mail.example.com 自动申请）</option>
+            </select>
+          </div>
+
+          <div class="imap-field">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">IMAP 服务器地址</label>
+            <input type="text" id="cfgImapHost" placeholder="例如: imap.gmail.com 或 imap.exmail.qq.com" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+
+          <div class="imap-field">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">IMAP 端口</label>
+            <input type="number" id="cfgImapPort" value="993" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+
+          <div class="imap-field">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">邮箱用户名 / 账号</label>
+            <input type="text" id="cfgImapUser" placeholder="your_email@domain.com" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+
+          <div class="imap-field">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">邮箱密码 / 独立授权码 (App Password)</label>
+            <input type="password" id="cfgImapPass" placeholder="******" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+
+          <div class="imap-field flex items-center gap-4 col-span-1 md:col-span-2 pt-2">
+            <label class="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+              <input type="checkbox" id="cfgImapSsl" checked class="w-4 h-4 text-indigo-600 rounded">
+              <span>启用 SSL/TLS 加密 (端口993推荐开启)</span>
+            </label>
+          </div>
+
+          <div id="apiMailFields" class="hidden col-span-1 md:col-span-2 space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">邮件 API 地址</label>
+              <input type="text" id="cfgMailApiUrl" placeholder="https://mail.example.com/api/mails?limit=20&offset=0" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">邮箱池（一行一个）</label>
+              <textarea id="cfgMailApiPool" rows="7" placeholder="邮箱----JWT&#10;或&#10;邮箱----https://mail.example.com/api/mails?limit=20&offset=0----JWT" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+              <p class="text-[11px] text-slate-500 mt-1">格式：<code>邮箱----JWT</code>，也兼容服务器上的 <code>邮箱----API地址----JWT</code>。保存后 JWT 会脱敏显示。</p>
+            </div>
+          </div>
+
+          <div id="cfDynamicMailFields" class="hidden col-span-1 md:col-span-2 space-y-3 rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">CF 邮箱服务地址</label>
+              <input type="text" id="cfgCfMailBase" placeholder="https://mail.example.com" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">邮箱域名</label>
+              <input type="text" id="cfgCfMailDomain" placeholder="example.com" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">站点密码（服务要求时填写）</label>
+              <input type="password" id="cfgCfMailSitePassword" placeholder="x-custom-auth（可留空）" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <p class="text-[11px] text-slate-600">每个任务开始时调用 <code>/api/new_address</code> 申请独立地址和 JWT，注册后自动轮询该地址的验证邮件。</p>
+          </div>
+
+          <div class="col-span-1 md:col-span-2 flex items-center gap-4">
+            <label class="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+              <input type="checkbox" id="cfgAutoVerify" checked class="w-4 h-4 text-indigo-600 rounded">
+              <span>收到邮件后自动打开链接激活</span>
+            </label>
+          </div>
+
+          <div class="col-span-1 md:col-span-2 pt-4 border-t border-slate-100 flex items-center justify-between">
+            <button type="button" onclick="testEmailConnection()" id="btnTestEmail" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg transition flex items-center gap-2 border border-slate-200">
+              <i class="fa-solid fa-plug"></i>
+              <span>测试连接并读取收件箱</span>
+            </button>
+
+            <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition shadow-sm">
+              保存配置
+            </button>
+          </div>
+        </form>
+
+        <div id="emailTestResult" class="hidden p-3 rounded-lg text-xs"></div>
+      </div>
+    </section>
+
+    <!-- TAB 3: Proxy Configuration -->
+    <section id="tab-proxy" class="tab-content hidden">
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-4xl flex flex-col gap-6">
+        <div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-network-wired text-indigo-600"></i>
+              <span>公司多办公室网络代理池 (Multi-IP Proxy Pool)</span>
+            </h3>
+            <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium">支持 SOCKS5H / SOCKS5 / HTTP · 自动熔断剔除</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">
+            支持配置多个办公室的出口代理 IP。批量注册时系统将根据策略自动轮换分配出口，<b>若某代理失效将自动熔断禁用并无缝切换至其他可用节点</b>。
+          </p>
+        </div>
+
+        <!-- Auto-disabled Proxies Alert Banner -->
+        <div id="disabledProxiesAlert" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs flex items-center justify-between">
+          <div class="flex items-center gap-2 text-rose-700">
+            <i class="fa-solid fa-triangle-exclamation text-rose-600 text-sm"></i>
+            <span>自动熔断告警：检测到有 <strong id="disabledProxiesCount" class="font-bold">0</strong> 个代理连接失效，系统已自动剔除！</span>
+          </div>
+          <button type="button" onclick="resetDisabledProxies()" class="px-2.5 py-1 bg-white hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-md font-semibold transition shadow-xs">
+            一键恢复所有代理
+          </button>
+        </div>
+
+        <form id="proxyConfigForm" onsubmit="saveProxyConfig(event)" class="space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+            <label class="flex items-center gap-2 cursor-pointer text-sm font-semibold text-slate-800 select-none">
+              <input type="checkbox" id="cfgProxyEnabled" class="w-4 h-4 text-indigo-600 rounded">
+              <span>启用公司代理池轮换 (各并发通道自动分配不同出口 IP)</span>
+            </label>
+
+            <div class="flex items-center gap-2 text-xs">
+              <span class="text-slate-500 font-medium">分配策略:</span>
+              <select id="cfgProxyStrategy" class="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 outline-none">
+                <option value="round_robin">轮询依次分配 (Round Robin - 推荐)</option>
+                <option value="random">随机抽取分配 (Random)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-semibold text-slate-700">
+                代理列表 (一行一个，支持 <code class="text-indigo-600 font-mono">socks5h://</code>、<code class="text-indigo-600 font-mono">socks5://</code>、<code class="text-indigo-600 font-mono">http://</code>，支持带用户名密码认证)
+              </label>
+              <button type="button" onclick="insertProxySample()" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium">
+                ⚡ 填入格式示例
+              </button>
+            </div>
+            <textarea id="cfgProxyPool" rows="7" placeholder="# 一行一个代理地址，支持以下所有格式:
+host:port:user:password (常见代理商格式，如 1.2.3.4:8080:admin:pass123)
+socks5://host:port:user:password
+http://用户名:密码@ip:端口
+socks5h://用户名:密码@ip:端口
+http://ip:端口 (免密)
+1.2.3.4:8080 (免密)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+            <p class="text-[11px] text-slate-400 mt-1">提示：全面兼容 <code>host:port:user:password</code>、<code>user:password@host:port</code> 以及带有 <code>http://</code> / <code>socks5://</code> 前缀的格式；未写协议时会自动识别 HTTP 或 SOCKS5H。</p>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <button type="button" onclick="testAllProxies()" id="btnTestProxies" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center gap-2 border border-slate-200 shadow-sm">
+              <i class="fa-solid fa-bolt text-amber-500"></i>
+              <span>批量检测代理连通性与真实出口 IP</span>
+            </button>
+
+            <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1.5">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>保存代理配置</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- Test Results Table -->
+        <div id="proxyTestResultsBox" class="hidden flex flex-col gap-2 pt-2 border-t border-slate-100">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-slate-800 flex items-center gap-1.5">
+              <i class="fa-solid fa-square-poll-vertical text-indigo-600"></i>
+              <span>代理连通性检测报告</span>
+            </span>
+            <span id="proxyTestSummaryBadge" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"></span>
+          </div>
+
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 border-b border-slate-200 font-medium">
+                <tr>
+                  <th class="px-3 py-2">序号</th>
+                  <th class="px-3 py-2">协议类型</th>
+                  <th class="px-3 py-2">代理服务器地址</th>
+                  <th class="px-3 py-2">延迟</th>
+                  <th class="px-3 py-2">公网出口 IP</th>
+                  <th class="px-3 py-2">检测结果</th>
+                </tr>
+              </thead>
+              <tbody id="proxyTestTableBody" class="divide-y divide-slate-100 font-mono">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 4: Protocol and Fingerprint Configuration -->
+    <section id="tab-protocol" class="tab-content hidden">
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-4xl flex flex-col gap-6">
+        <div>
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-display text-indigo-600"></i>
+              <span>纯协议注册与验证码浏览器</span>
+            </h3>
+            <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">仅滑块时弹出</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">协议客户端负责访客会话、注册、收信、激活和 OAuth 换票。只有验证码阶段打开本机 Chromium，滑块完成后立即关闭。</p>
+        </div>
+
+        <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start gap-2">
+          <i class="fa-solid fa-circle-check mt-0.5"></i>
+          <span>自动滑块、外部求解器、jsdom 运行时、CDP 推流与鼠标回放均已从运行路径删除。请只在本机运行，并在浏览器窗口出现时完成滑块。</span>
+        </div>
+
+        <form id="protocolConfigForm" onsubmit="saveProtocolConfig(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="md:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">注册路径</label>
+            <input type="text" value="纯协议注册 + 验证码阶段人工滑块" disabled class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-600">
+          </div>
+
+          <div class="md:col-span-2 flex flex-wrap items-center gap-5">
+            <label class="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700" title="通过 forgot-password 接口检查邮箱是否已有账号">
+              <input type="checkbox" id="cfgProtocolCheckExists" checked class="w-4 h-4 text-indigo-600 rounded">
+              <span>注册前查询邮箱是否已存在，已注册则跳过创建</span>
+            </label>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">导航语言</label>
+            <select id="cfgProtocolLocale" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="zh-CN">zh-CN</option>
+              <option value="en-US">en-US</option>
+              <option value="ja-JP">ja-JP</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">IANA 时区</label>
+            <input type="text" id="cfgProtocolTimezone" placeholder="Asia/Shanghai" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">人工滑块等待（秒）</label>
+            <input type="number" id="cfgCaptchaTimeout" min="60" value="600" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">人工邮件验证等待（秒）</label>
+            <input type="number" id="cfgManualVerifyTimeout" min="60" value="600" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+
+          <div class="md:col-span-2 pt-4 border-t border-slate-100">
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <h4 class="text-sm font-bold text-slate-800">zcode2api 自动导入</h4>
+                <p class="text-xs text-slate-500 mt-0.5">注册成功后把 CLI JWT、Web JWT、业务令牌和设备标识推送到账号库。</p>
+              </div>
+              <label class="flex items-center gap-2 text-xs font-medium text-slate-700">
+                <input type="checkbox" id="cfgZcode2ApiEnabled" class="w-4 h-4 text-indigo-600 rounded">
+                <span>启用</span>
+              </label>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">控制台地址</label>
+                <input type="url" id="cfgZcode2ApiUrl" placeholder="http://127.0.0.1:6789" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">管理密码</label>
+                <input type="password" id="cfgZcode2ApiPassword" autocomplete="new-password" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 mt-3">
+              <label class="flex items-center gap-2 text-xs font-medium text-slate-700">
+                <input type="checkbox" id="cfgZcode2ApiAuto" class="w-4 h-4 text-indigo-600 rounded">
+                <span>注册成功后自动导入</span>
+              </label>
+              <button type="button" onclick="testZcode2Api()" class="px-3 py-1.5 bg-cyan-50 text-cyan-700 border border-cyan-200 rounded-lg text-xs font-medium hover:bg-cyan-100">测试连接</button>
+              <button type="button" onclick="importExistingToZcode2Api()" class="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-medium hover:bg-emerald-100">导入现有账号</button>
+            </div>
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Debug 日志</label>
+            <div class="flex gap-2">
+              <input type="text" value="logs/register-debug.log" disabled class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono bg-slate-50 text-slate-600">
+              <a href="/api/debug-log" target="_blank" class="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-medium rounded-lg transition">打开日志</a>
+              <a href="/api/traffic-log" target="_blank" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 text-white text-sm font-medium rounded-lg transition">打开抓包</a>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Debug 日志记录任务阶段与异常；抓包记录协议和验证码浏览器的请求/响应。Cookie、JWT、密码和验证码凭证均只保留脱敏摘要。</p>
+          </div>
+
+          <div class="md:col-span-2 pt-4 border-t border-slate-100 flex justify-end">
+            <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition shadow-sm flex items-center gap-2">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>保存配置</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- TAB 5: Realtime Console Logs -->
+    <section id="tab-logs" class="tab-content hidden">
+      <div class="log-console bg-slate-900 rounded-xl p-4 text-xs text-slate-300 shadow-inner flex flex-col h-[520px]">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800 text-slate-400">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
+            <span class="ml-2 font-sans font-semibold text-slate-300 text-xs">Automation Event Stream</span>
+          </div>
+          <button onclick="clearLogs()" class="hover:text-white transition text-xs">清屏</button>
+        </div>
+        <div id="logContainer" class="flex-1 overflow-y-auto pt-3 space-y-1.5">
+          <div class="text-slate-500">[SYSTEM] 自动化日志控制台已就绪...</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal: Import / Add Tasks -->
+  <div id="addModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900">批量导入 / 新增待注册账号</h3>
+        <button onclick="closeAddModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-semibold text-slate-700">
+            待注册人员列表 (✨ <span class="text-indigo-600 font-bold">直接一行一个英文名字</span>，或 <code class="text-slate-600">姓名, 邮箱, 密码</code>)
+          </label>
+          <button type="button" onclick="insertGotclassTemplate()" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium">
+            ⚡ 填入英文名字示例
+          </button>
+        </div>
+        <textarea id="batchInputText" rows="6" placeholder="只需输入英文名字即可，系统将自动生成对应邮箱并启动流程：
+Alex
+David Miller
+Sarah
+Michael_Zhang
+
+（也支持传统格式：张三, verify+zhangsan@gotclass.xyz, Password123!@#）" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+        <p class="text-[11px] text-slate-400 mt-1">智能分配：IMAP 模式下只输入英文名字会生成 <code class="text-indigo-600 font-mono">verify+名字@gotclass.xyz</code>；API 邮箱池模式下会按池顺序分配真实邮箱。</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">统一默认密码 (选填)</label>
+          <input type="text" id="defaultPassInput" placeholder="留空则自动生成强密码" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">本次目标账号数</label>
+          <input type="number" id="addTargetCountInput" min="1" step="1" value="1" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          <p class="text-[11px] text-slate-400 mt-1">浏览器窗口一次只弹一个，完成后再处理下一个。</p>
+        </div>
+      </div>
+
+      <div class="p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl">
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" id="autoStartCheckbox" checked class="w-4 h-4 text-indigo-600 rounded">
+          <span class="text-xs font-semibold text-indigo-900">导入后立即启动本机浏览器队列（自动填表、自动收信、激活与提取 JWT；滑块由人工完成）</span>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+        <button onclick="closeAddModal()" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition">取消</button>
+        <button onclick="submitBatchAdd()" class="px-5 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shadow-sm flex items-center gap-1.5">
+          <i class="fa-solid fa-bolt"></i>
+          <span>一键导入并启动流程</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Manual Verify Link -->
+  <div id="manualVerifyModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900">手动填入验证邮件链接</h3>
+        <button onclick="closeManualVerifyModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <input type="hidden" id="manualVerifyTaskId">
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">验证链接 (URL 或 Token)</label>
+        <input type="text" id="manualVerifyUrlInput" placeholder="https://chat.z.ai/auth/verify_email?token=..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+        <p class="text-[11px] text-slate-400 mt-1">从邮箱中收到的邮件复制链接粘贴到此处，系统将代为访问并激活。</p>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+        <button onclick="closeManualVerifyModal()" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition">取消</button>
+        <button onclick="submitManualVerify()" class="px-5 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition shadow-sm">
+          立即激活
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: View Credentials & JWT -->
+  <div id="credentialsModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved text-indigo-600 text-lg"></i>
+          <h3 class="text-base font-bold text-slate-900">账号凭证与 JWT 详情 (桌面 CLI 专用)</h3>
+        </div>
+        <button onclick="closeCredentialsModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">邮箱账号与密码</label>
+          <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between font-mono">
+            <span id="credAccountInfo" class="text-slate-800"></span>
+            <button onclick="copyText('credAccountInfo')" class="text-indigo-600 hover:text-indigo-800 font-sans font-medium">复制</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="font-semibold text-slate-700">Coding Plan CLI JWT (可直接填入 Zcode2Api / 桌面客户端)</label>
+            <span id="credSubTag" class="text-[11px] text-emerald-600 font-mono"></span>
+          </div>
+          <div class="relative">
+            <textarea id="credCliJwt" rows="3" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-mono text-[11px] text-slate-700 outline-none select-all" placeholder="在此查看或直接粘贴已有的 JWT (eyJ...)"></textarea>
+            <div class="absolute top-2 right-2 flex items-center gap-1.5">
+              <button onclick="saveManualJwt()" class="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-sans transition shadow-sm">
+                保存录入
+              </button>
+              <button onclick="copyText('credCliJwt')" class="px-2 py-1 bg-indigo-600 text-white rounded text-[11px] font-sans hover:bg-indigo-700 transition shadow-sm">
+                一键复制
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">固化设备指纹 Device_MID (匹配 Zcode2Api UUIDv5，防3012异常)</label>
+          <div class="p-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between font-mono text-[11px]">
+            <span id="credDeviceMid" class="text-slate-600"></span>
+            <button onclick="copyText('credDeviceMid')" class="text-indigo-600 hover:text-indigo-800 font-sans font-medium">复制</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+        <div class="flex items-center gap-2">
+          <button onclick="reExtractJwtFromModal()" id="modalReExtractBtn" class="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-sm flex items-center gap-1.5">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span>重新提取官方 JWT</span>
+          </button>
+          <button onclick="startOAuthFlow()" class="px-3.5 py-2 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg transition flex items-center gap-1.5">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            <span>网页端授权</span>
+          </button>
+        </div>
+        <button onclick="closeCredentialsModal()" class="px-5 py-2 text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=20261106_log_v5"></script>
+</body>
+</html>
